@@ -1,15 +1,12 @@
+batch_size: 12
 steps: 20000
-batch_size: 16
-num_workers: 4
-lr: 3e-4
+lr: 1e-4
 val_every: 1000
-save_every: 2000
-sample_steps: 40
-out_dir: runs/fm16k
+save_every: 5000
+num_workers: 4
 device: cuda
-seed: 0
-amp: true
-
+sample_steps: 40
+seed: 42
 wandb:
-  enable: false
-  project: azimuth-fm
+  enable: true
+  project: azimuth-fm-poc
