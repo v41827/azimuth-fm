@@ -85,7 +85,7 @@ def run(cfg: DictConfig):
                     t_dim=cfg.model.t_dim,
                 )
 
-            with torch.cuda.amp.autocast(enabled=True):
+            with torch.cuda.amp.autocast(enabled=scaler.is_enabled()):
                 vhat = model(xt, h)
                 loss = F.mse_loss(vhat, vstar)
 
