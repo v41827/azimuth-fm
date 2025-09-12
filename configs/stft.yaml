@@ -1,0 +1,3 @@
+n_fft: 512
+hop: 256
+window: hann

@@ -1,0 +1,5 @@
+ckpt: runs/fm16k/ckpt_final.pt
+batch_size: 8
+n_steps: 40
+device: cuda
+out_dir: runs/samples

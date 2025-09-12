@@ -1,0 +1,8 @@
+train_csv: /path/to/metadata_train.csv
+val_csv:   /path/to/metadata_val.csv
+audio_root: /path/to/audio_root
+sr: 16000
+seg_sec: 1.5
+
+az_mode: sincos        # or "deg" if you want the old behavior
+enforce_csv_sr: true

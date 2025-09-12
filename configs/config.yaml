@@ -1,0 +1,14 @@
+# Top-level defaults for Hydra
+defaults:
+  - data
+  - stft
+  - model
+  - train
+  - sample
+
+# Hydra output dir control (put Hydra logs under runs/)
+hydra:
+  run:
+    dir: runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  job:
+    chdir: false
