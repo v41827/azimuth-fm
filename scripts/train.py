@@ -1,5 +1,6 @@
 import os, time, torch, torch.nn.functional as F
 from contextlib import nullcontext
+import torchaudio
 from torch.utils.data import DataLoader
 from hydra import main
 from omegaconf import DictConfig, OmegaConf
@@ -9,6 +10,7 @@ from src.models.unet_film import TinyUNet
 from src.fm.objectives import linear_path_xt, target_velocity_const
 from src.fm.cond import build_cond
 from src.utils.metrics import itd_ild_proxy, corr
+from src.utils.audio import istft_wave
 
 try:
     import wandb
@@ -27,12 +29,14 @@ def run(cfg: DictConfig):
     train_set = BinauralSTFTDataset(
         cfg.data.train_csv, cfg.data.audio_root, sr=cfg.data.sr,
         seg_sec=cfg.data.seg_sec, n_fft=cfg.stft.n_fft, hop=cfg.stft.hop,
-        win=cfg.stft.window, az_mode=cfg.data.az_mode, enforce_csv_sr=True
+        win=cfg.stft.window, normalized=cfg.stft.normalized, win_length=cfg.stft.win_length,
+        az_mode=cfg.data.az_mode, enforce_csv_sr=True,
     )
     val_set = BinauralSTFTDataset(
         cfg.data.val_csv, cfg.data.audio_root, sr=cfg.data.sr,
         seg_sec=cfg.data.seg_sec, n_fft=cfg.stft.n_fft, hop=cfg.stft.hop,
-        win=cfg.stft.window, az_mode=cfg.data.az_mode, enforce_csv_sr=True
+        win=cfg.stft.window, normalized=cfg.stft.normalized, win_length=cfg.stft.win_length,
+        az_mode=cfg.data.az_mode, enforce_csv_sr=True,
     )
 
     pw = bool(getattr(cfg.train, "num_workers", 0) and cfg.train.num_workers > 0)
@@ -97,6 +101,9 @@ def run(cfg: DictConfig):
 
             opt.zero_grad(set_to_none=True)
             scaler.scale(loss).backward()
+            if float(getattr(cfg.train, "grad_clip", 0.0)) > 0.0:
+                scaler.unscale_(opt)
+                torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.train.grad_clip)
             scaler.step(opt)
             scaler.update()
 
@@ -139,9 +146,41 @@ def validate(cfg, model, val_loader, device, shape, step):
     )
     itd_gt, ild_gt = itd_ild_proxy(X); itd_pr, ild_pr = itd_ild_proxy(Xgen)
     c_itd = corr(itd_gt, itd_pr); c_ild = corr(ild_gt, ild_pr)
-    print(f"[VAL {step}] ITD corr: {c_itd:.3f}  ILD corr: {c_ild:.3f}")
+    print(f"[VAL {step}] ITD corr: {c_itd:.4f}  ILD corr: {c_ild:.4f}")
     if cfg.train.wandb.enable and HAVE_WANDB:
         wandb.log({"val/itd_corr": c_itd, "val/ild_corr": c_ild, "step": step})
+
+    # Dump a few fixed-azimuth samples for quick listening
+    try:
+        fixed_degs = [0, 30, 60, 90, 330]
+        degs = torch.tensor(fixed_degs, device=device, dtype=torch.float32)
+        from src.fm.integrators import heun_integrate as _heun
+        Xsyn = _heun(
+            model,
+            shape,
+            degs,
+            cfg.train.sample_steps,
+            device,
+            fourier_feats=cfg.model.fourier_feats,
+            t_dim=cfg.model.t_dim,
+            az_source="deg",
+        )
+        length = int(cfg.data.seg_sec * cfg.data.sr)
+        out_dir = os.path.join(cfg.train.out_dir, f"val_samples/step_{step}")
+        os.makedirs(out_dir, exist_ok=True)
+        for i, d in enumerate(fixed_degs):
+            L = istft_wave(
+                Xsyn[i, 0:2], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length,
+                normalized=cfg.stft.normalized, win_length=cfg.stft.win_length,
+            )
+            R = istft_wave(
+                Xsyn[i, 2:4], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length,
+                normalized=cfg.stft.normalized, win_length=cfg.stft.win_length,
+            )
+            wav = torch.stack([L, R], dim=0).cpu()
+            torchaudio.save(os.path.join(out_dir, f"pred_az{int(d)}.wav"), wav, cfg.data.sr)
+    except Exception as e:
+        print(f"[VAL {step}] audio dump failed: {e}")
 
 if __name__ == "__main__":
     run()

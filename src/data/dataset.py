@@ -34,6 +34,9 @@ class BinauralSTFTDataset(Dataset):
         n_fft: int,
         hop: int,
         win: str = "hann",
+        *,
+        normalized: bool = False,
+        win_length: int | None = None,
         az_mode: str = "deg",
         enforce_csv_sr: bool = True,
     ):
@@ -56,6 +59,8 @@ class BinauralSTFTDataset(Dataset):
         self.win = win
         self.az_mode = az_mode
         self.enforce_csv_sr = enforce_csv_sr
+        self.normalized = normalized
+        self.win_length = win_length
 
         # basic column checks
         has_filename = "filename" in self.df.columns
@@ -119,8 +124,14 @@ class BinauralSTFTDataset(Dataset):
         wav = self._ensure_len(wav, target_N)  # [2, N]
 
         # STFT per ear -> Re/Im channels
-        L = stft_wave(wav[0:1, :], self.n_fft, self.hop, self.win)[0]
-        R = stft_wave(wav[1:2, :], self.n_fft, self.hop, self.win)[0]
+        L = stft_wave(
+            wav[0:1, :], self.n_fft, self.hop, self.win,
+            normalized=self.normalized, win_length=self.win_length,
+        )[0]
+        R = stft_wave(
+            wav[1:2, :], self.n_fft, self.hop, self.win,
+            normalized=self.normalized, win_length=self.win_length,
+        )[0]
         X = torch.stack([L[0], L[1], R[0], R[1]], dim=0)  # [4, F, T]
 
         az = self._read_az(row)

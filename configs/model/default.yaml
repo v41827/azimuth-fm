@@ -1,4 +1,4 @@
-base_ch: 64
-depth: 3
+base_ch: 96
+depth: 4
 fourier_feats: 2
 t_dim: 64

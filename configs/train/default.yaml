@@ -1,7 +1,7 @@
 steps: 20000
-batch_size: 16
+batch_size: 64
 num_workers: 4
-lr: 3e-4
+lr: 2e-4
 val_every: 1000
 save_every: 2000
 sample_steps: 40
@@ -9,6 +9,7 @@ out_dir: runs/fm16k
 device: cuda
 seed: 0
 amp: true
+grad_clip: 1.0
 
 wandb:
   enable: false

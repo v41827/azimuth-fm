@@ -51,8 +51,14 @@ def run(cfg: DictConfig):
     out_dir = os.path.join(cfg.sample.out_dir, "audio"); os.makedirs(out_dir, exist_ok=True)
     B = min(4, Xgen.shape[0])
     for i in range(B):
-        L = istft_wave(Xgen[i,0:2], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length)
-        R = istft_wave(Xgen[i,2:4], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length)
+        L = istft_wave(
+            Xgen[i,0:2], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length,
+            normalized=cfg.stft.normalized, win_length=cfg.stft.win_length,
+        )
+        R = istft_wave(
+            Xgen[i,2:4], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length,
+            normalized=cfg.stft.normalized, win_length=cfg.stft.win_length,
+        )
         wav = torch.stack([L, R], dim=0).cpu()
         # Name file using azimuth degrees when possible
         try:
