@@ -1,4 +1,5 @@
 import os, time, torch, torch.nn.functional as F
+from contextlib import nullcontext
 from torch.utils.data import DataLoader
 from hydra import main
 from omegaconf import DictConfig, OmegaConf
@@ -85,7 +86,12 @@ def run(cfg: DictConfig):
                     t_dim=cfg.model.t_dim,
                 )
 
-            with torch.cuda.amp.autocast(enabled=scaler.is_enabled()):
+            amp_ctx = (
+                torch.amp.autocast("cuda", enabled=scaler.is_enabled())
+                if device.type == "cuda"
+                else nullcontext()
+            )
+            with amp_ctx:
                 vhat = model(xt, h)
                 loss = F.mse_loss(vhat, vstar)
 
