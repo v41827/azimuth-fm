@@ -1,6 +1,6 @@
-train_csv: /path/to/metadata_train.csv
-val_csv:   /path/to/metadata_val.csv
-audio_root: /path/to/audio_root
+train_csv: /parallel_scratch/yc01847/whitenoise_binaural_kemar_fm/manifestsmetadata_train.csv
+val_csv:   /parallel_scratch/yc01847/whitenoise_binaural_kemar_fm/manifestsmetadata_val.csv
+audio_root: /parallel_scratch/yc01847/whitenoise_binaural_kemar_fm
 sr: 16000
 seg_sec: 1.5
 
