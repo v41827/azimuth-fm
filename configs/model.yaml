@@ -1,4 +1,0 @@
-base_ch: 64
-depth: 3
-fourier_feats: 2  # sin/cos harmonics count
-t_dim: 64

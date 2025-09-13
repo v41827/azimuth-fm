@@ -1,0 +1,4 @@
+base_ch: 64
+depth: 3
+fourier_feats: 2
+t_dim: 64

@@ -1,10 +1,11 @@
 # Top-level defaults for Hydra
 defaults:
-  - data
-  - stft
-  - model
-  - train
-  - sample
+  - _self_
+  - data: default
+  - stft: default
+  - model: default
+  - train: default
+  - sample: default
 
 # Hydra output dir control (put Hydra logs under runs/)
 hydra:
