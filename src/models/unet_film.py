@@ -37,7 +37,9 @@ class TinyUNet(nn.Module):
         self.downs = nn.ModuleList(downs)
         self.mid = Block(ch, ch, cond_dim)
         for _ in range(depth):
-            ups.append(Block(ch + ch//2, ch//2, cond_dim)); ch //= 2
+            # After upsample we concat with skip of the same channel count (ch)
+            # so the input to the up block is 2*ch, and we reduce to ch//2.
+            ups.append(Block(ch * 2, ch // 2, cond_dim)); ch //= 2
         self.ups = nn.ModuleList(ups)
         self.out_conv = nn.Conv2d(base, 4, 3, padding=1)
         self.pools = nn.ModuleList([nn.AvgPool2d(2) for _ in range(depth)])

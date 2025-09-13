@@ -51,7 +51,7 @@ def run(cfg: DictConfig):
 
     model = TinyUNet(base=cfg.model.base_ch, depth=cfg.model.depth, cond_dim=cond_dim).to(device)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.train.lr)
-    scaler = torch.cuda.amp.GradScaler(enabled=bool(getattr(cfg.train, "amp", True)))
+    scaler = torch.amp.GradScaler("cuda", enabled=bool(getattr(cfg.train, "amp", True)))
 
     if cfg.train.wandb.enable and HAVE_WANDB:
         wandb.init(project=cfg.train.wandb.project, config=OmegaConf.to_container(cfg, resolve=True))
@@ -63,7 +63,7 @@ def run(cfg: DictConfig):
         for X, az, _ in train_loader:
             gstep += 1
             X = X.to(device)
-            az = torch.tensor(az, device=device, dtype=torch.float32)
+            az = torch.as_tensor(az, device=device, dtype=torch.float32)
             x0 = torch.randn_like(X); x1 = X
             t = torch.rand((X.shape[0],), device=device)
             xt = linear_path_xt(x0, x1, t)
@@ -125,7 +125,7 @@ def run(cfg: DictConfig):
 def validate(cfg, model, val_loader, device, shape, step):
     model.eval()
     X, az, _ = next(iter(val_loader))
-    X = X.to(device); az = torch.tensor(az, device=device, dtype=torch.float32)
+    X = X.to(device); az = torch.as_tensor(az, device=device, dtype=torch.float32)
     from src.fm.integrators import heun_integrate
     Xgen = heun_integrate(
         model,
