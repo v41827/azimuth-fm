@@ -37,6 +37,16 @@ class BinauralSTFTDataset(Dataset):
         az_mode: str = "deg",
         enforce_csv_sr: bool = True,
     ):
+        # Validate inputs early with clear messages
+        if not os.path.isfile(csv_path):
+            raise FileNotFoundError(
+                f"CSV not found: {csv_path}. Provide a valid path via data.train_csv / data.val_csv."
+            )
+        if not os.path.isdir(audio_root):
+            raise FileNotFoundError(
+                f"audio_root not found: {audio_root}. Set data.audio_root to your dataset directory."
+            )
+
         self.df = pd.read_csv(csv_path)
         self.audio_root = audio_root
         self.sr = sr
