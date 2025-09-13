@@ -45,8 +45,8 @@ def run(cfg: DictConfig):
 
     # infer shapes & cond_dim
     X0, _, _ = next(iter(train_loader))
-    F, T = X0.shape[-2], X0.shape[-1]
-    shape = (4, F, T)
+    nF, nT = X0.shape[-2], X0.shape[-1]
+    shape = (4, nF, nT)
     cond_dim = 2 * cfg.model.fourier_feats + cfg.model.t_dim
 
     model = TinyUNet(base=cfg.model.base_ch, depth=cfg.model.depth, cond_dim=cond_dim).to(device)
