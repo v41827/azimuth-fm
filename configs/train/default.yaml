@@ -21,3 +21,7 @@ wandb:
   project: azimuth-fm
   log_audio: false
   max_audio: 10
+  upload_artifacts: false
+  artifact_prefix: azfm
+  artifact_ckpt_every: 2000
+  artifact_audio_every: 1000

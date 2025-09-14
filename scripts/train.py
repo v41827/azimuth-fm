@@ -121,13 +121,37 @@ def run(cfg: DictConfig):
 
             if gstep % cfg.train.save_every == 0:
                 ckpt = {"model": model.state_dict(), "cfg": OmegaConf.to_container(cfg, resolve=True)}
-                torch.save(ckpt, os.path.join(cfg.train.out_dir, f"ckpt_{gstep}.pt"))
+                ckpt_path = os.path.join(cfg.train.out_dir, f"ckpt_{gstep}.pt")
+                torch.save(ckpt, ckpt_path)
+                # Optionally upload checkpoint as W&B Artifact
+                if (
+                    cfg.train.wandb.enable and HAVE_WANDB and
+                    bool(getattr(cfg.train.wandb, "upload_artifacts", False)) and
+                    (gstep % int(getattr(cfg.train.wandb, "artifact_ckpt_every", cfg.train.save_every)) == 0)
+                ):
+                    try:
+                        import wandb as _wb
+                        prefix = getattr(cfg.train.wandb, "artifact_prefix", "azfm")
+                        art = _wb.Artifact(f"{prefix}-ckpt-{gstep}", type="model", metadata={"step": int(gstep)})
+                        art.add_file(ckpt_path)
+                        _wb.log_artifact(art)
+                    except Exception as e:
+                        print(f"[ARTIFACT] ckpt upload failed at step {gstep}: {e}")
 
             if gstep >= cfg.train.steps:
                 break
 
-    torch.save({"model": model.state_dict(), "cfg": OmegaConf.to_container(cfg, resolve=True)},
-               os.path.join(cfg.train.out_dir, "ckpt_final.pt"))
+    final_path = os.path.join(cfg.train.out_dir, "ckpt_final.pt")
+    torch.save({"model": model.state_dict(), "cfg": OmegaConf.to_container(cfg, resolve=True)}, final_path)
+    if cfg.train.wandb.enable and HAVE_WANDB and bool(getattr(cfg.train.wandb, "upload_artifacts", False)):
+        try:
+            import wandb as _wb
+            prefix = getattr(cfg.train.wandb, "artifact_prefix", "azfm")
+            art = _wb.Artifact(f"{prefix}-ckpt-final", type="model", metadata={"step": int(cfg.train.steps)})
+            art.add_file(final_path)
+            _wb.log_artifact(art)
+        except Exception as e:
+            print(f"[ARTIFACT] final ckpt upload failed: {e}")
     print("Done.")
 
 @torch.inference_mode()
@@ -189,6 +213,20 @@ def validate(cfg, model, val_loader, device, shape, step):
                 if wb_audios and cfg.train.wandb.enable and HAVE_WANDB:
                     max_n = int(getattr(cfg.train.wandb, "max_audio", 10))
                     wandb.log({f"val/audio_s{s}": wb_audios[:max_n], "step": step})
+                # Optionally upload this step's audio directory as a W&B Artifact
+                if (
+                    cfg.train.wandb.enable and HAVE_WANDB and
+                    bool(getattr(cfg.train.wandb, "upload_artifacts", False)) and
+                    (int(step) % int(getattr(cfg.train.wandb, "artifact_audio_every", 1000)) == 0)
+                ):
+                    try:
+                        import wandb as _wb
+                        prefix = getattr(cfg.train.wandb, "artifact_prefix", "azfm")
+                        art = _wb.Artifact(f"{prefix}-val-audio-{int(step)}", type="audio", metadata={"step": int(step)})
+                        art.add_dir(base_dir)
+                        _wb.log_artifact(art)
+                    except Exception as e:
+                        print(f"[ARTIFACT] val audio upload failed: {e}")
         except Exception as e:
             print(f"[VAL {step}] audio dump failed: {e}")
 
