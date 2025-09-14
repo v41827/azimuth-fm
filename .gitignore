@@ -29,6 +29,7 @@ venv/
 # Experiment outputs (keep folder, ignore contents)
 runs/*
 !runs/.gitkeep
+!runs/**/.gitkeep
 
 # Logs & local artifacts
 wandb/
@@ -38,4 +39,3 @@ outputs/
 
 # Optional Hydra multirun dir
 multirun/
-
