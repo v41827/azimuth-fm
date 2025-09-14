@@ -11,6 +11,13 @@ seed: 0
 amp: true
 grad_clip: 1.0
 
+# Validation sampling controls
+val_dump_audio: true
+val_sample_degs: [0, 30, 60, 90, 330]
+val_show_steps: [8, 20, 40]
+
 wandb:
   enable: false
   project: azimuth-fm
+  log_audio: false
+  max_audio: 10

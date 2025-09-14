@@ -1,6 +1,7 @@
 import os, time, torch, torch.nn.functional as F
 from contextlib import nullcontext
 import torchaudio
+import torchaudio
 from torch.utils.data import DataLoader
 from hydra import main
 from omegaconf import DictConfig, OmegaConf
@@ -10,6 +11,7 @@ from src.models.unet_film import TinyUNet
 from src.fm.objectives import linear_path_xt, target_velocity_const
 from src.fm.cond import build_cond
 from src.utils.metrics import itd_ild_proxy, corr
+from src.utils.audio import istft_wave
 from src.utils.audio import istft_wave
 
 try:
@@ -150,37 +152,45 @@ def validate(cfg, model, val_loader, device, shape, step):
     if cfg.train.wandb.enable and HAVE_WANDB:
         wandb.log({"val/itd_corr": c_itd, "val/ild_corr": c_ild, "step": step})
 
-    # Dump a few fixed-azimuth samples for quick listening
-    try:
-        fixed_degs = [0, 30, 60, 90, 330]
-        degs = torch.tensor(fixed_degs, device=device, dtype=torch.float32)
-        from src.fm.integrators import heun_integrate as _heun
-        Xsyn = _heun(
-            model,
-            shape,
-            degs,
-            cfg.train.sample_steps,
-            device,
-            fourier_feats=cfg.model.fourier_feats,
-            t_dim=cfg.model.t_dim,
-            az_source="deg",
-        )
-        length = int(cfg.data.seg_sec * cfg.data.sr)
-        out_dir = os.path.join(cfg.train.out_dir, f"val_samples/step_{step}")
-        os.makedirs(out_dir, exist_ok=True)
-        for i, d in enumerate(fixed_degs):
-            L = istft_wave(
-                Xsyn[i, 0:2], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length,
-                normalized=cfg.stft.normalized, win_length=cfg.stft.win_length,
-            )
-            R = istft_wave(
-                Xsyn[i, 2:4], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length,
-                normalized=cfg.stft.normalized, win_length=cfg.stft.win_length,
-            )
-            wav = torch.stack([L, R], dim=0).cpu()
-            torchaudio.save(os.path.join(out_dir, f"pred_az{int(d)}.wav"), wav, cfg.data.sr)
-    except Exception as e:
-        print(f"[VAL {step}] audio dump failed: {e}")
+    # Dump user-defined azimuth samples and optionally log to W&B
+    if bool(getattr(cfg.train, "val_dump_audio", True)):
+        try:
+            from src.fm.integrators import heun_integrate as _heun
+            deg_list = list(getattr(cfg.train, "val_sample_degs", [0, 30, 60, 90, 330]))
+            steps_list = list(getattr(cfg.train, "val_show_steps", [cfg.train.sample_steps]))
+            length = int(cfg.data.seg_sec * cfg.data.sr)
+            base_dir = os.path.join(cfg.train.out_dir, f"val_samples/step_{step}")
+            for s in steps_list:
+                out_dir = os.path.join(base_dir, f"s{s}")
+                os.makedirs(out_dir, exist_ok=True)
+                degs = torch.tensor(deg_list, device=device, dtype=torch.float32)
+                Xsyn = _heun(
+                    model, shape, degs, int(s), device,
+                    fourier_feats=cfg.model.fourier_feats, t_dim=cfg.model.t_dim, az_source="deg",
+                )
+                wb_audios = []
+                for i, d in enumerate(deg_list):
+                    L = istft_wave(
+                        Xsyn[i, 0:2], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length,
+                        normalized=cfg.stft.normalized, win_length=cfg.stft.win_length,
+                    )
+                    R = istft_wave(
+                        Xsyn[i, 2:4], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length,
+                        normalized=cfg.stft.normalized, win_length=cfg.stft.win_length,
+                    )
+                    wav = torch.stack([L, R], dim=0).cpu()
+                    torchaudio.save(os.path.join(out_dir, f"pred_az{int(d)}.wav"), wav, cfg.data.sr)
+                    if cfg.train.wandb.enable and HAVE_WANDB and bool(getattr(cfg.train.wandb, "log_audio", False)):
+                        try:
+                            import wandb
+                            wb_audios.append(wandb.Audio(wav.numpy(), sample_rate=cfg.data.sr, caption=f"s{s}_az{int(d)}"))
+                        except Exception:
+                            pass
+                if wb_audios and cfg.train.wandb.enable and HAVE_WANDB:
+                    max_n = int(getattr(cfg.train.wandb, "max_audio", 10))
+                    wandb.log({f"val/audio_s{s}": wb_audios[:max_n], "step": step})
+        except Exception as e:
+            print(f"[VAL {step}] audio dump failed: {e}")
 
 if __name__ == "__main__":
     run()

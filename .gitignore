@@ -1,0 +1,41 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.so
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Editors & OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+.ipynb_checkpoints/
+
+# Virtual envs
+.env
+.venv
+venv/
+.envrc
+
+# Experiment outputs (keep folder, ignore contents)
+runs/*
+!runs/.gitkeep
+
+# Logs & local artifacts
+wandb/
+logs/
+outputs/
+*.log
+
+# Optional Hydra multirun dir
+multirun/
+
