@@ -11,6 +11,8 @@ dependencies:
   - scipy
   - pandas
   - tqdm
+  - matplotlib
+  - seaborn
   # Audio I/O helpers (wav saving/reading)
   - libsndfile
   - sox

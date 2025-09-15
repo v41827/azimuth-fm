@@ -206,8 +206,8 @@ def validate(cfg, model, val_loader, device, shape, step):
                     torchaudio.save(os.path.join(out_dir, f"pred_az{int(d)}.wav"), wav, cfg.data.sr)
                     if cfg.train.wandb.enable and HAVE_WANDB and bool(getattr(cfg.train.wandb, "log_audio", False)):
                         try:
-                            import wandb
-                            wb_audios.append(wandb.Audio(wav.numpy(), sample_rate=cfg.data.sr, caption=f"s{s}_az{int(d)}"))
+                            import wandb as _wb
+                            wb_audios.append(_wb.Audio(wav.numpy(), sample_rate=cfg.data.sr, caption=f"s{s}_az{int(d)}"))
                         except Exception:
                             pass
                 if wb_audios and cfg.train.wandb.enable and HAVE_WANDB:

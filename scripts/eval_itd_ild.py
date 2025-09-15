@@ -12,6 +12,17 @@ from src.fm.integrators import heun_integrate
 from src.utils.audio import istft_wave
 from src.utils.metrics import itd_ild_proxy
 
+try:
+    import pandas as pd
+    import numpy as np
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    HAVE_PLOTTING = True
+except Exception:
+    HAVE_PLOTTING = False
+
 
 def lateral_deg_from_global(deg: float) -> float:
     # Map global azimuth [0,360) to signed lateral angle in [-90, 90]
@@ -168,6 +179,19 @@ def run(cfg: DictConfig):
             l = L - L.mean(); r = R - R.mean()
             lag = gcc_phat_tdoa(l, r, max_lag)
             lat_pred = tdoa_to_lateral_deg(lag, cfg.data.sr)
+            # IACC for generated
+            nrm = torch.norm(l) * torch.norm(r) + 1e-8
+            Nsig = l.numel()
+            nfft = 1
+            while nfft < 2 * Nsig:
+                nfft *= 2
+            Lf = torch.fft.rfft(l, n=nfft)
+            Rf = torch.fft.rfft(r, n=nfft)
+            xcorr = torch.fft.irfft(Lf * torch.conj(Rf), n=nfft)
+            xcorr = torch.roll(xcorr, shifts=Nsig//2, dims=0)
+            mid = nfft // 2
+            low = max(0, mid - max_lag); high = min(nfft, mid + max_lag + 1)
+            iacc_pred = float((xcorr[low:high].abs().max() / nrm).item())
 
             # Reference from templates
             ref = templates.get(deg, None)
@@ -199,6 +223,7 @@ def run(cfg: DictConfig):
                 "itd_pred": float(itd_g[0].item()),
                 "ild_pred": float(ild_g[0].item()),
                 "lat_pred": float(lat_pred),
+                "iacc_pred": float(iacc_pred),
                 "az_pred_tm": int(az_pred_tm),
                 "az_circ_err": float(az_err_circ),
                 "itd_ref": ref["itd"],
@@ -218,6 +243,97 @@ def run(cfg: DictConfig):
         writer = csv.DictWriter(f, fieldnames=list(results[0].keys()))
         writer.writeheader(); writer.writerows(results)
     print(f"Wrote eval metrics to {out_csv}  (N={len(results)})")
+
+    # ----------------------------
+    # Plots and summaries
+    # ----------------------------
+    if HAVE_PLOTTING:
+        df = pd.DataFrame(results)
+        plots_dir = os.path.join(cfg.eval.out_dir, "plots"); os.makedirs(plots_dir, exist_ok=True)
+
+        # Aggregate by degree
+        g = df.groupby("deg")
+        agg = g.agg({
+            "itd_pred":"mean", "ild_pred":"mean", "iacc_pred":"mean",
+            "itd_ref":"mean",  "ild_ref":"mean",  "iacc_ref":"mean",
+            "lat_abs_err":"mean", "az_circ_err":"mean"
+        }).reset_index()
+        agg.to_csv(os.path.join(plots_dir, "aggregates_by_deg.csv"), index=False)
+
+        # ITD vs azimuth
+        plt.figure(figsize=(6,4))
+        plt.plot(agg["deg"], agg["itd_ref"], label="ref", linewidth=2)
+        plt.plot(agg["deg"], agg["itd_pred"], label="model", linewidth=2)
+        plt.xlabel("Azimuth (deg)"); plt.ylabel("ITD proxy (arb)"); plt.legend(); plt.tight_layout()
+        p_itd = os.path.join(plots_dir, "itd_vs_az.png"); plt.savefig(p_itd, dpi=160); plt.close()
+
+        # ILD vs azimuth
+        plt.figure(figsize=(6,4))
+        plt.plot(agg["deg"], agg["ild_ref"], label="ref", linewidth=2)
+        plt.plot(agg["deg"], agg["ild_pred"], label="model", linewidth=2)
+        plt.xlabel("Azimuth (deg)"); plt.ylabel("ILD (dB, proxy)"); plt.legend(); plt.tight_layout()
+        p_ild = os.path.join(plots_dir, "ild_vs_az.png"); plt.savefig(p_ild, dpi=160); plt.close()
+
+        # IACC vs azimuth
+        plt.figure(figsize=(6,4))
+        plt.plot(agg["deg"], agg["iacc_ref"], label="ref", linewidth=2)
+        plt.plot(agg["deg"], agg["iacc_pred"], label="model", linewidth=2)
+        plt.xlabel("Azimuth (deg)"); plt.ylabel("IACC"); plt.ylim(0,1.0); plt.legend(); plt.tight_layout()
+        p_iacc = os.path.join(plots_dir, "iacc_vs_az.png"); plt.savefig(p_iacc, dpi=160); plt.close()
+
+        # Lateral MAE vs azimuth
+        plt.figure(figsize=(6,4))
+        plt.plot(agg["deg"], agg["lat_abs_err"], label="lateral MAE", linewidth=2)
+        plt.xlabel("Azimuth (deg)"); plt.ylabel("|lat_pred - lat_tgt| (deg)"); plt.tight_layout()
+        p_latmae = os.path.join(plots_dir, "lateral_mae_vs_az.png"); plt.savefig(p_latmae, dpi=160); plt.close()
+
+        # Circular azimuth MAE vs azimuth (SOFA frame)
+        plt.figure(figsize=(6,4))
+        plt.plot(agg["deg"], agg["az_circ_err"], label="azimuth circ. MAE", linewidth=2)
+        plt.xlabel("Azimuth (deg)"); plt.ylabel("Circular MAE (deg)"); plt.tight_layout()
+        p_azmae = os.path.join(plots_dir, "azimuth_circ_mae_vs_az.png"); plt.savefig(p_azmae, dpi=160); plt.close()
+
+        # Confusion matrix (targets vs template-matched preds)
+        cm = pd.crosstab(df["deg"], df["az_pred_tm"], normalize="index")
+        plt.figure(figsize=(6,5))
+        sns.heatmap(cm, cmap="viridis", vmin=0, vmax=1)
+        plt.xlabel("Predicted azimuth"); plt.ylabel("Target azimuth"); plt.tight_layout()
+        p_cm = os.path.join(plots_dir, "confusion_matrix.png"); plt.savefig(p_cm, dpi=160); plt.close()
+
+        # Scatter ITD and ILD
+        plt.figure(figsize=(5,4))
+        plt.scatter(df["itd_ref"], df["itd_pred"], s=6, alpha=0.6)
+        lims = [df[["itd_ref","itd_pred"]].min().min(), df[["itd_ref","itd_pred"]].max().max()]
+        plt.plot(lims, lims, 'r--'); plt.xlabel('ITD ref'); plt.ylabel('ITD pred'); plt.tight_layout()
+        p_sc_itd = os.path.join(plots_dir, "scatter_itd.png"); plt.savefig(p_sc_itd, dpi=160); plt.close()
+
+        plt.figure(figsize=(5,4))
+        plt.scatter(df["ild_ref"], df["ild_pred"], s=6, alpha=0.6)
+        lims = [df[["ild_ref","ild_pred"]].min().min(), df[["ild_ref","ild_pred"]].max().max()]
+        plt.plot(lims, lims, 'r--'); plt.xlabel('ILD ref'); plt.ylabel('ILD pred'); plt.tight_layout()
+        p_sc_ild = os.path.join(plots_dir, "scatter_ild.png"); plt.savefig(p_sc_ild, dpi=160); plt.close()
+
+        print(f"Saved plots under {plots_dir}")
+
+        # Optional W&B logging
+        try:
+            if cfg.eval.wandb.enable:
+                import wandb
+                wandb.init(project=cfg.eval.wandb.project, config=OmegaConf.to_container(cfg, resolve=True))
+                table = wandb.Table(dataframe=df)
+                wandb.log({
+                    "eval/table": table,
+                    "eval/itd_vs_az": wandb.Image(p_itd),
+                    "eval/ild_vs_az": wandb.Image(p_ild),
+                    "eval/iacc_vs_az": wandb.Image(p_iacc),
+                    "eval/lateral_mae": wandb.Image(p_latmae),
+                    "eval/azimuth_circ_mae": wandb.Image(p_azmae),
+                    "eval/confusion": wandb.Image(p_cm),
+                    "eval/scatter_itd": wandb.Image(p_sc_itd),
+                    "eval/scatter_ild": wandb.Image(p_sc_ild),
+                })
+        except Exception as e:
+            print(f"[EVAL] W&B logging failed: {e}")
 
 if __name__ == "__main__":
     run()
