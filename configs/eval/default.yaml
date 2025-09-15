@@ -1,0 +1,24 @@
+ckpt: runs/fm16k/ckpt_final.pt
+device: cuda
+
+# Azimuths to evaluate (degrees)
+degs: [0, 15, 30, 45, 60, 75, 90, 330, 315, 300, 285, 270]
+n_per_deg: 8
+n_steps: 40
+batch_size: 8
+seed: 0
+out_dir: runs/eval
+
+# GCC/Correlation settings
+max_lag_ms: 1.0
+
+# Template-matching weights for SOFA-frame azimuth prediction
+template_weights:
+  itd: 1.0
+  ild: 1.0
+
+# W&B (optional, reuse train settings)
+wandb:
+  enable: false
+  project: azimuth-fm
+  upload_artifacts: false
