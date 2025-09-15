@@ -315,25 +315,43 @@ def run(cfg: DictConfig):
 
         print(f"Saved plots under {plots_dir}")
 
-        # Optional W&B logging
-        try:
-            if cfg.eval.wandb.enable:
-                import wandb
-                wandb.init(project=cfg.eval.wandb.project, config=OmegaConf.to_container(cfg, resolve=True))
-                table = wandb.Table(dataframe=df)
-                wandb.log({
-                    "eval/table": table,
-                    "eval/itd_vs_az": wandb.Image(p_itd),
-                    "eval/ild_vs_az": wandb.Image(p_ild),
-                    "eval/iacc_vs_az": wandb.Image(p_iacc),
-                    "eval/lateral_mae": wandb.Image(p_latmae),
-                    "eval/azimuth_circ_mae": wandb.Image(p_azmae),
-                    "eval/confusion": wandb.Image(p_cm),
-                    "eval/scatter_itd": wandb.Image(p_sc_itd),
-                    "eval/scatter_ild": wandb.Image(p_sc_ild),
-                })
-        except Exception as e:
-            print(f"[EVAL] W&B logging failed: {e}")
+    # W&B logging (independent of plotting stack)
+    try:
+        if cfg.eval.wandb.enable:
+            import wandb as _wb
+            _wb.init(project=cfg.eval.wandb.project, config=OmegaConf.to_container(cfg, resolve=True))
+            logs = {}
+            # Log table if pandas available
+            try:
+                if 'pd' in globals():
+                    df = pd.read_csv(out_csv)
+                    logs["eval/table"] = _wb.Table(dataframe=df)
+            except Exception:
+                pass
+            # Log images if they exist
+            for name in [
+                "itd_vs_az", "ild_vs_az", "iacc_vs_az",
+                "lateral_mae", "azimuth_circ_mae",
+                "confusion", "scatter_itd", "scatter_ild",
+            ]:
+                p = os.path.join(cfg.eval.out_dir, "plots", f"{name}.png")
+                if os.path.isfile(p):
+                    logs[f"eval/{name}"] = _wb.Image(p)
+            if logs:
+                _wb.log(logs)
+
+            # Also upload CSV and plots dir as an Artifact
+            try:
+                art = _wb.Artifact("azfm-eval-results", type="eval")
+                art.add_file(out_csv)
+                plots_dir = os.path.join(cfg.eval.out_dir, "plots")
+                if os.path.isdir(plots_dir):
+                    art.add_dir(plots_dir)
+                _wb.log_artifact(art)
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"[EVAL] W&B logging failed: {e}")
 
 if __name__ == "__main__":
     run()
