@@ -353,5 +353,115 @@ def run(cfg: DictConfig):
     except Exception as e:
         print(f"[EVAL] W&B logging failed: {e}")
 
+    # -------------------------------------------------
+    # Optional: dump per-angle example figures (gen vs ref)
+    # -------------------------------------------------
+    if bool(getattr(cfg.eval, "dump_examples", True)) and HAVE_PLOTTING:
+        # Helper: find a reference sample in val set close to target degree
+        ds_ref = BinauralSTFTDataset(
+            cfg.data.val_csv, cfg.data.audio_root, sr=cfg.data.sr, seg_sec=cfg.data.seg_sec,
+            n_fft=cfg.stft.n_fft, hop=cfg.stft.hop, win=cfg.stft.window,
+            normalized=cfg.stft.normalized, win_length=cfg.stft.win_length,
+            az_mode=cfg.data.az_mode, enforce_csv_sr=True,
+        )
+        def deg_from_az(az):
+            if isinstance(az, torch.Tensor) and az.numel() == 2:
+                return (math.degrees(math.atan2(float(az[0]), float(az[1]))) + 360.0) % 360.0
+            return float(az) % 360.0
+
+        def pick_ref_for_deg(target_deg: int):
+            best_i, best_d = None, 1e9
+            for i in range(min(len(ds_ref), 2000)):
+                Xr, azr, Nr = ds_ref[i]
+                d = circular_diff_deg(deg_from_az(azr), target_deg)
+                if d < best_d:
+                    best_i, best_d = (Xr, azr, Nr), d
+                    if d < 0.5:
+                        break
+            return best_i
+
+        ex_dir = os.path.join(cfg.eval.out_dir, "examples"); os.makedirs(ex_dir, exist_ok=True)
+        ex_degs = cfg.eval.example_degs if cfg.eval.example_degs is not None else cfg.eval.degs
+        for deg in ex_degs:
+            deg = int(deg)
+            ref = pick_ref_for_deg(deg)
+            if ref is None:
+                continue
+            Xref, azr, Nr = ref
+            # Generate N examples and plot the first one
+            az = torch.tensor([float(deg)], device=device)
+            Xgen = heun_integrate(
+                model, shape, az, int(cfg.eval.n_steps), device,
+                fourier_feats=cfg.model.fourier_feats, t_dim=cfg.model.t_dim, az_source='deg',
+            )
+            # Reconstruct time-domain
+            Lg = istft_wave(Xgen[0,0:2], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length,
+                            normalized=cfg.stft.normalized, win_length=cfg.stft.win_length)
+            Rg = istft_wave(Xgen[0,2:4], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length,
+                            normalized=cfg.stft.normalized, win_length=cfg.stft.win_length)
+            Lr = istft_wave(Xref[0:2], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, int(Nr),
+                            normalized=cfg.stft.normalized, win_length=cfg.stft.win_length)
+            Rr = istft_wave(Xref[2:4], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, int(Nr),
+                            normalized=cfg.stft.normalized, win_length=cfg.stft.win_length)
+
+            # Spectrograms (magnitude dB)
+            def mag_db(X):
+                c = torch.complex(X[0], X[1])
+                m = (c.abs() + 1e-7).cpu().numpy()
+                return 20.0 * np.log10(m)
+            specL_gen = mag_db(Xgen[0,0:2]); specR_gen = mag_db(Xgen[0,2:4])
+            specL_ref = mag_db(Xref[0:2]);   specR_ref = mag_db(Xref[2:4])
+            vmin, vmax = -80, 0
+            plt.figure(figsize=(9,6))
+            for i,(S,title) in enumerate([
+                (specL_ref, 'Ref L'), (specL_gen, 'Gen L'),
+                (specR_ref, 'Ref R'), (specR_gen, 'Gen R')
+            ]):
+                ax = plt.subplot(2,2,i+1)
+                im = ax.imshow(S, aspect='auto', origin='lower', vmin=vmin, vmax=vmax, cmap='magma')
+                ax.set_title(title)
+                ax.set_xlabel('T'); ax.set_ylabel('F')
+            plt.tight_layout(); p = os.path.join(ex_dir, f"deg{deg:03d}_spec.png"); plt.savefig(p, dpi=160); plt.close()
+
+            # IPD heatmap (low bands)
+            def ipd_heat(X):
+                dph = np.angle(np.exp(1j*(X[0].cpu().numpy().astype(np.float64) - X[2].cpu().numpy().astype(np.float64))))
+                return dph
+            ipd_ref = ipd_heat(torch.stack([Xref[0], Xref[1], Xref[2], Xref[3]]))
+            ipd_gen = ipd_heat(Xgen[0])
+            lowF = slice(0, min(40, ipd_ref.shape[0]))
+            plt.figure(figsize=(8,4))
+            ax = plt.subplot(1,2,1); im=ax.imshow(ipd_ref[lowF], aspect='auto', origin='lower', vmin=-np.pi, vmax=np.pi, cmap='twilight'); ax.set_title('Ref IPD')
+            ax = plt.subplot(1,2,2); im=ax.imshow(ipd_gen[lowF], aspect='auto', origin='lower', vmin=-np.pi, vmax=np.pi, cmap='twilight'); ax.set_title('Gen IPD')
+            plt.tight_layout(); p = os.path.join(ex_dir, f"deg{deg:03d}_ipd.png"); plt.savefig(p, dpi=160); plt.close()
+
+            # ILD curves (avg over time)
+            def ild_curve(X):
+                Lc = np.abs((X[0].cpu().numpy() + 1j*X[1].cpu().numpy()))
+                Rc = np.abs((X[2].cpu().numpy() + 1j*X[3].cpu().numpy()))
+                ild = 20*np.log10((Lc+1e-7)/(Rc+1e-7))
+                return ild.mean(axis=1)
+            ild_ref = ild_curve(Xref); ild_gen = ild_curve(Xgen[0])
+            plt.figure(figsize=(6,4))
+            plt.plot(ild_ref, label='Ref'); plt.plot(ild_gen, label='Gen'); plt.legend(); plt.xlabel('F bin'); plt.ylabel('ILD (dB)'); plt.tight_layout()
+            p = os.path.join(ex_dir, f"deg{deg:03d}_ild_curve.png"); plt.savefig(p, dpi=160); plt.close()
+
+            # Waveforms overlay
+            t = np.arange(Lg.numel())/cfg.data.sr
+            plt.figure(figsize=(8,4))
+            plt.subplot(2,1,1); plt.plot(t, Lr.cpu().numpy(), label='Ref L', alpha=0.7); plt.plot(t, Lg.cpu().numpy(), label='Gen L', alpha=0.7); plt.legend(); plt.ylabel('amp')
+            plt.subplot(2,1,2); plt.plot(t, Rr.cpu().numpy(), label='Ref R', alpha=0.7); plt.plot(t, Rg.cpu().numpy(), label='Gen R', alpha=0.7); plt.legend(); plt.xlabel('s'); plt.ylabel('amp')
+            plt.tight_layout(); p = os.path.join(ex_dir, f"deg{deg:03d}_wave.png"); plt.savefig(p, dpi=160); plt.close()
+
+        # Optional W&B upload of examples directory
+        try:
+            if cfg.eval.wandb.enable:
+                import wandb as _wb
+                art = _wb.Artifact('azfm-eval-examples', type='eval_examples')
+                art.add_dir(ex_dir)
+                _wb.log_artifact(art)
+        except Exception:
+            pass
+
 if __name__ == "__main__":
     run()

@@ -22,3 +22,8 @@ wandb:
   enable: false
   project: azimuth-fm
   upload_artifacts: false
+
+# Example figure dumping (spectrograms, IPD/ILD, GCC)
+dump_examples: true
+example_degs: null   # null → use eval.degs
+example_per_deg: 2
