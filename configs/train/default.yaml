@@ -13,7 +13,7 @@ grad_clip: 1.0
 
 # Validation sampling controls
 val_dump_audio: true
-val_sample_degs: [0, 30, 60, 90, 330]
+val_sample_degs: [0, 30, 48, 60, 72, 90, 281, 330]
 val_show_steps: [8, 20, 40]
 
 wandb:
