@@ -6,6 +6,7 @@ defaults:
   - model: default
   - train: default
   - sample: default
+  - eval: default
 
 # Hydra output dir control (put Hydra logs under runs/)
 hydra:
