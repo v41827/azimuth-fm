@@ -1,0 +1,213 @@
+_wandb:
+    value:
+        cli_version: 0.21.4
+        e:
+            qhbaly6cv82swhnjvvenxpfv9hskx9mq:
+                args:
+                    - data.audio_root=/parallel_scratch/yc01847/whitenoise_binaural_kemar_fm
+                    - data.train_csv=/parallel_scratch/yc01847/whitenoise_binaural_kemar_fm/manifests/metadata_train.csv
+                    - data.val_csv=/parallel_scratch/yc01847/whitenoise_binaural_kemar_fm/manifests/metadata_val.csv
+                    - train.device=cuda
+                    - train.batch_size=64
+                    - train.lr=2e-4
+                    - train.num_workers=2
+                    - train.wandb.enable=true
+                    - train.wandb.project=azimuth-fm
+                    - train.wandb.log_audio=true
+                    - train.val_sample_degs=[0,30,48,60,72,90,281,330]
+                    - train.val_show_steps=[8,20,40]
+                cpu_count: 64
+                cpu_count_logical: 64
+                cudaVersion: "12.2"
+                disk:
+                    /:
+                        total: "75125227520"
+                        used: "21541580800"
+                email: v41827@gmail.com
+                executable: /parallel_scratch/yc01847/miniconda3/envs/azimuth-fm/bin/python
+                git:
+                    commit: 1fb2ad7afe2658857f5b2465ff2bcb7e127e9f7e
+                    remote: git@github.com:v41827/azimuth-fm.git
+                gpu: NVIDIA A100 80GB PCIe
+                gpu_count: 2
+                gpu_nvidia:
+                    - architecture: Ampere
+                      memoryTotal: "85899345920"
+                      name: NVIDIA A100 80GB PCIe
+                      uuid: GPU-76cfeb01-cb7d-4c0b-2087-e743fc213594
+                    - architecture: Ampere
+                      cudaCores: 6912
+                      memoryTotal: "85899345920"
+                      name: NVIDIA A100 80GB PCIe
+                      uuid: GPU-e849db9a-3aa1-6694-373c-355ca963a0ba
+                host: gpu-node02
+                memory:
+                    total: "540365869056"
+                os: Linux-4.18.0-305.3.1.el8_4.x86_64-x86_64-with-glibc2.28
+                program: -m scripts.train
+                python: CPython 3.10.14
+                root: /parallel_scratch/yc01847/azimuth-fm
+                slurm:
+                    conf: /etc/slurm/slurm.conf
+                    cpu_bind: quiet,mask_cpu:0x0000000100000002
+                    cpu_bind_list: "0x0000000100000002"
+                    cpu_bind_type: 'mask_cpu:'
+                    cpu_bind_verbose: quiet
+                    cpus_on_node: "2"
+                    distribution: cyclic
+                    gpus_on_node: "1"
+                    gtids: "0"
+                    job_cpus_per_node: "2"
+                    job_end_time: "1758125688"
+                    job_gid: "5000094"
+                    job_id: "449182"
+                    job_name: bash
+                    job_nodelist: gpu-node02
+                    job_partition: gpu
+                    job_start_time: "1757780088"
+                    job_uid: "345048"
+                    job_user: yc01847
+                    jobid: "449182"
+                    launch_node_ipaddr: 10.71.16.110
+                    localid: "0"
+                    mpi_type: pmix
+                    nnodes: "1"
+                    nodeid: "0"
+                    nodelist: gpu-node02
+                    nprocs: "1"
+                    ntasks: "1"
+                    pmix_mapping_serv: (vector,(0,1,1))
+                    pmixp_abort_agent_port: "42493"
+                    prio_process: "0"
+                    procid: "0"
+                    pty_port: "42492"
+                    pty_win_col: "214"
+                    pty_win_row: "52"
+                    srun_comm_host: 10.71.16.110
+                    srun_comm_port: "42494"
+                    step_gpus: "1"
+                    step_id: "1"
+                    step_launcher_port: "42494"
+                    step_nodelist: gpu-node02
+                    step_num_nodes: "1"
+                    step_num_tasks: "1"
+                    step_tasks_per_node: "1"
+                    stepid: "1"
+                    task_pid: "3221250"
+                    tasks_per_node: "1"
+                    topology_addr: gpu-node02
+                    topology_addr_pattern: node
+                    umask: "0022"
+                startedAt: "2025-09-15T02:54:15.917001Z"
+                writerId: qhbaly6cv82swhnjvvenxpfv9hskx9mq
+        m: []
+        python_version: 3.10.14
+        t:
+            "1":
+                - 1
+                - 50
+            "2":
+                - 1
+                - 50
+            "3":
+                - 16
+            "4": 3.10.14
+            "5": 0.21.4
+            "12": 0.21.4
+            "13": linux-x86_64
+data:
+    value:
+        audio_root: /parallel_scratch/yc01847/whitenoise_binaural_kemar_fm
+        az_mode: sincos
+        enforce_csv_sr: true
+        seg_sec: 1.5
+        sr: 16000
+        train_csv: /parallel_scratch/yc01847/whitenoise_binaural_kemar_fm/manifests/metadata_train.csv
+        val_csv: /parallel_scratch/yc01847/whitenoise_binaural_kemar_fm/manifests/metadata_val.csv
+eval:
+    value:
+        batch_size: 8
+        ckpt: runs/fm16k/ckpt_final.pt
+        degs:
+            - 0
+            - 15
+            - 30
+            - 45
+            - 60
+            - 75
+            - 90
+            - 330
+            - 315
+            - 300
+            - 285
+            - 270
+        device: cuda
+        max_lag_ms: 1
+        n_per_deg: 8
+        n_steps: 40
+        out_dir: runs/eval
+        seed: 0
+        template_weights:
+            ild: 1
+            itd: 1
+        wandb:
+            enable: false
+            project: azimuth-fm
+            upload_artifacts: false
+model:
+    value:
+        base_ch: 96
+        depth: 4
+        fourier_feats: 2
+        t_dim: 64
+sample:
+    value:
+        batch_size: 8
+        ckpt: runs/fm16k/ckpt_final.pt
+        device: cuda
+        n_steps: 40
+        out_dir: runs/samples
+stft:
+    value:
+        hop: 256
+        n_fft: 512
+        normalized: true
+        win_length: 512
+        window: hann
+train:
+    value:
+        amp: true
+        batch_size: 64
+        device: cuda
+        grad_clip: 1
+        lr: 0.0002
+        num_workers: 2
+        out_dir: runs/fm16k
+        sample_steps: 40
+        save_every: 2000
+        seed: 0
+        steps: 20000
+        val_dump_audio: true
+        val_every: 2000
+        val_sample_degs:
+            - 0
+            - 30
+            - 48
+            - 60
+            - 72
+            - 90
+            - 281
+            - 330
+        val_show_steps:
+            - 8
+            - 20
+            - 40
+        wandb:
+            artifact_audio_every: 2000
+            artifact_ckpt_every: 2000
+            artifact_prefix: azfm
+            enable: true
+            log_audio: true
+            max_audio: 10
+            project: azimuth-fm
+            upload_artifacts: false
