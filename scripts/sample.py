@@ -31,8 +31,16 @@ def run(cfg: DictConfig):
     )
     dl = DataLoader(ds, batch_size=cfg.sample.batch_size, shuffle=False, num_workers=2)
 
-    X, az, _ = next(iter(dl))
-    X = X.to(device); az = torch.tensor(az, device=device, dtype=torch.float32)
+    # Use user prompt if provided, else use dataset azimuth
+    if hasattr(cfg.sample, "prompt_az") and cfg.sample.prompt_az is not None:
+        az = torch.tensor(cfg.sample.prompt_az, device=device, dtype=torch.float32)
+        if az.ndim == 0:
+            az = az.unsqueeze(0)
+    else:        
+        X, az, _ = next(iter(dl))
+        az = torch.tensor(az, device=device, dtype=torch.float32)
+    
+    X = X.to(device)
     F, T = X.shape[-2], X.shape[-1]
     shape = (4, F, T)
 
