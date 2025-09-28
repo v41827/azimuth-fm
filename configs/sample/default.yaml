@@ -1,6 +1,6 @@
 ckpt: runs/fm16k_speech/ckpt_final.pt
 batch_size: 8
-n_steps: 160
+n_steps: 200
 device: cuda
-out_dir: runs/samples_s150
-prompt_az: [278, 288, 298, 308, 318, 328, 338, 348, 358]
+out_dir: runs/samples_s200
+prompt_az: [278, 288, 298, 308, 318, 328, 338, 348, 358, 0, 43, 45, 85, 90, 68, 20, 27, 33, 270, 355, 315, 300, 30, 60, 75, 275, 305, 335, 345]
