@@ -59,7 +59,8 @@ def run(cfg: DictConfig):
 
     length = int(cfg.data.seg_sec * cfg.data.sr)
     out_dir = os.path.join(cfg.sample.out_dir, "audio"); os.makedirs(out_dir, exist_ok=True)
-    B = min(4, Xgen.shape[0])
+    # Save all generated items instead of capping at 4
+    B = Xgen.shape[0]
     for i in range(B):
         L = istft_wave(
             Xgen[i,0:2], cfg.stft.n_fft, cfg.stft.hop, cfg.stft.window, length,
